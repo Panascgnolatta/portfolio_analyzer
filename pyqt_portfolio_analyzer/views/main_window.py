@@ -1,7 +1,7 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QMainWindow, QFileDialog, QWidget, QVBoxLayout, QPushButton, QLabel, QTableWidget,
-    QTableWidgetItem, QSlider, QHBoxLayout, QGroupBox, QAbstractItemView
+    QTableWidgetItem, QSlider, QHBoxLayout, QGroupBox, QAbstractItemView, QHeaderView
 )
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -50,7 +50,6 @@ class MainWindow(QMainWindow):
         # チャート
         self.canvas = FigureCanvas(Figure(figsize=(6, 3)))
         self.ax = self.canvas.figure.subplots()
-        # ←ここで初期時も背景を黒っぽく
         self.ax.set_facecolor("#282c34")
         self.canvas.figure.set_facecolor("#282c34")
         self.ax.set_title("Equity Curve", color="white")
@@ -72,7 +71,9 @@ class MainWindow(QMainWindow):
         self.file_table = QTableWidget()
         self.file_table.setColumnCount(2)
         self.file_table.setHorizontalHeaderLabels(["ファイル名", "削除"])
-        self.file_table.horizontalHeader().setStretchLastSection(True)
+        # ▼ここがポイント
+        self.file_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)         # ファイル名：最大幅
+        self.file_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents) # 削除：必要最小
         self.file_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         file_vbox.addWidget(self.file_table)
 
@@ -176,7 +177,6 @@ class MainWindow(QMainWindow):
     # View 更新
     def clear_chart_and_metrics(self):
         self.ax.clear()
-        # 背景・枠を常時ダークグレー
         self.ax.set_facecolor("#282c34")
         self.canvas.figure.set_facecolor("#282c34")
         self.ax.set_title("Equity Curve", color="white")
@@ -192,10 +192,8 @@ class MainWindow(QMainWindow):
 
     def update_chart(self, equity):
         self.ax.clear()
-        # ダークグレー背景を維持
         self.ax.set_facecolor("#282c34")
         self.canvas.figure.set_facecolor("#282c34")
-        # 赤色でやや細めのライン（linewidth=1.3）
         self.ax.plot(equity.index, equity.values, color="#ff4444", linewidth=1.3)
         self.ax.set_title("Equity Curve", color="white")
         self.ax.tick_params(colors="white")
