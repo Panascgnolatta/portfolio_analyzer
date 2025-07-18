@@ -1,93 +1,75 @@
 # Portfolio Analyzer
 
-Python + PyQt6 で作成した、トレーディングビューのバックテストデータ（Excel）を多銘柄・多指標で可視化・分析できるデスクトップツールです。
+トレーディングビュー（TradingView）のバックテストExcelファイル（.xlsx）を読み込んで、  
+**複数銘柄のパフォーマンスを一括評価できるPyQt6ベースのデスクトップアプリ**です。
+
+- ダークテーマ＆黒背景＋赤ラインのエクイティカーブ
+- ファイルごとにON/OFF・削除・一括管理可能
+- 最大ドローダウン許容値の調整で破産確率(RoR)を即座に再計算
 
 ---
 
 ## 🚀 特徴
 
-- TradingView などで出力した `.xlsx` バックテストデータを複数銘柄まとめて解析
-- 損益曲線（エクイティカーブ）の描画
-- **重要トレード指標を一発表示**
-  - CAGR（年率リターン）
-  - 最大ドローダウン
-  - シャープレシオ／Sortinoレシオ
-  - プロフィットファクター
-  - 期待値（Expectancy）
-  - **ペイオフレシオ（Payoff Ratio）**
-  - 勝率
-  - 平均利益／平均損失
-  - 最大連勝／最大連敗
-  - **Risk of Ruin（破産確率、モンテカルロ法）**
-- **破産閾値（資金の何%で破産とみなすか）をGUIスライダーで直感的に変更可能**
-- Windows用バッチファイル・ショートカットにも対応
+- **複数バックテストファイルを同時分析**（TradingViewエクスポート対応）
+- **エクイティカーブ可視化**（黒背景＋赤ラインで高コントラスト）
+- **主要トレード指標を自動算出＆3列テーブルで一覧表示**
+- **破産許容DD（最大ドローダウン）をスライダーで動的変更 → RoR自動再計算**
+- **ファイル管理が直感的**  
+  - チェックON/OFFで分析対象を切替
+  - ゴミ箱ボタンで個別削除
+  - 全ON/全OFF・一括リセットも可能
+- **完全なダークテーマUI**（テーブル・ボタン・グラフまで統一）
+
+---
+
+## 📝 使い方
+
+1. **Excelファイルを開く**ボタンからTradingView等でエクスポートした複数の`.xlsx`ファイルを選択
+2. エクイティカーブ＆各種指標が自動表示
+3. **破産閾値（最大ドローダウン）**をスライダーで調整すると、RoRが即時再計算
+4. ファイル管理エリアで個別ON/OFFや削除、全ON/全OFF、一括リセット、再計算ボタンで柔軟に管理・分析
+5. 結果をもとにストラテジー評価や比較・改良に活用
+
+---
+
+## 📊 実装されている主要指標
+
+- **CAGR (%)** … 年率複利リターン
+- **Max Drawdown (%)** … 最大ドローダウン
+- **Sharpe Ratio** … シャープレシオ
+- **Sortino Ratio** … Sortinoレシオ
+- **Profit Factor** … プロフィットファクター
+- **Expectancy** … 1トレードあたり期待値
+- **Payoff Ratio** … 平均利益 ÷ 平均損失
+- **Win Rate (%)** … 勝率
+- **Avg Win / Avg Loss** … 平均利益／損失
+- **Max Win Streak / Max Lose Streak** … 最大連勝／連敗
+- **Risk of Ruin (%)** … 破産確率（モンテカルロシミュレーション）
 
 ---
 
 ## 🖥️ スクリーンショット
 
-![スクリーンショット例](./docs/screenshot.png)  
-
----
-
-## 📦 インストール手順（Windows + Anaconda 推奨）
-
-```bash
-# 1. クローン or ZIP展開
-git clone https://github.com/yourname/portfolio_analyzer.git
-cd portfolio_analyzer
-
-# 2. Conda仮想環境作成
-conda create -n pa-env python=3.12 -y
-conda activate pa-env
-
-# 3. 依存パッケージインストール
-pip install -r requirements.txt
-pip install openpyxl pyqt6 matplotlib
-
-# 4. アプリ起動
-python -m pyqt_portfolio_analyzer
-
-# またはバッチファイルから
-start_app.bat
-
-## 📝 使い方
-
-- 「Excelファイルを開く」ボタンで、複数のバックテストファイル（.xlsx）を選択
-- エクイティカーブ＆各種指標が自動表示されます
-- 破産閾値（何%で破産とみなすか）をスライダーで調整 → RoRが即座に再計算
-- 分析結果をもとに戦略の評価・改良に活用
-
----
-
-## 📊 実装されている指標一覧
-
-- **CAGR（%）** … 年率複利リターン
-- **Max Drawdown（%）** … 最大ドローダウン
-- **Sharpe Ratio** … シャープレシオ
-- **Sortino Ratio** … Sortinoレシオ
-- **Profit Factor** … プロフィットファクター
-- **Expectancy** … 1トレードあたりの期待値
-- **Payoff Ratio** … 平均利益 ÷ 平均損失
-- **Win Rate（%）** … 勝率
-- **Avg Win / Avg Loss** … 平均利益／損失
-- **Max Win Streak / Max Lose Streak** … 最大連勝／連敗
-- **Risk of Ruin（%）** … 破産確率（モンテカルロシミュレーション）
+![screenshot](docs/screenshot.png)
 
 ---
 
 ## ⚡ Windowsデスクトップからの起動
 
-- `start_app.bat` をダブルクリックでアプリを起動可能
-- `start_app.bat` のショートカットをデスクトップに作ると便利
+- `start_app.bat` をダブルクリックでアプリ起動
+- ショートカットをデスクトップに作成しておくと便利
 
 ---
 
-## 🛠️ 開発/コントリビュート
+## 🛠️ 開発・コントリビュート
 
-- 追加したい指標やUI改善案など Pull Request・Issue 大歓迎
-- 主要指標の計算ロジックは `pyqt_portfolio_analyzer/models/metrics.py` を参照
-- GUI部分は `views/main_window.py`
+- 追加したい指標やUI改善案など **Pull Request・Issue 大歓迎**
+- 主要指標の計算ロジックは  
+  `pyqt_portfolio_analyzer/models/metrics.py`  
+  GUI部分は  
+  `pyqt_portfolio_analyzer/views/main_window.py`  
+  を参照
 
 ---
 
@@ -108,5 +90,15 @@ MIT License
 
 ## 🙋 よくある質問
 
-**Q. エラーが出る場合？**  
-A. 必要なPythonパッケージ（`openpyxl` など）がインストール済みか確認、またはGitHub Issueでご質問ください。
+**Q. エラーが出る場合は？**  
+A. 必要なPythonパッケージ（openpyxl など）がインストール済みか確認、またはGitHub Issueでご質問ください。
+
+---
+
+## 🛠️ 開発用（環境セットアップ例）
+
+```sh
+conda create -n pa-env python=3.12 -y
+conda activate pa-env
+pip install -r requirements.txt  # 必要パッケージをインストール
+python -m pyqt_portfolio_analyzer  # または start_app.bat
