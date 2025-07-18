@@ -22,28 +22,24 @@ from ..controller import Controller
 
 
 class MainWindow(QMainWindow):
-    """
-    メイン GUI。
-    - Excel ファイル読み込み
-    - 損益曲線チャート
-    - 指標テーブル
-    - ファイルON/OFFリスト＋リセット＋再計算
-    - 破産閾値スライダー
-    """
+    """メイン UI"""
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Portfolio Analyzer")
         self.controller = Controller(self)
-        self._ruin_rate = 0.20  # 20% デフォルト
-        self.file_paths = []    # 管理している全ファイルのパスリスト
+        self._ruin_rate = 0.20          # 20 % (=許容DD)
+        self.file_paths: list[str] = []  # 取り込んだファイルのフルパス
         self._build_ui()
 
+    # ---------------------------------------------------------------------
+    # UI 構築
+    # ---------------------------------------------------------------------
     def _build_ui(self):
         central = QWidget()
         main_vbox = QVBoxLayout(central)
 
-        # --- ファイル選択ボタン ---
+        # ── ファイル選択 & 全リセット ────────────────────────────
         btn_hbox = QHBoxLayout()
         self.btn_open = QPushButton("Excelファイルを開く")
         self.btn_open.clicked.connect(self.open_files)
@@ -54,32 +50,32 @@ class MainWindow(QMainWindow):
         btn_hbox.addWidget(self.btn_reset)
         main_vbox.addLayout(btn_hbox)
 
-        # --- 破産閾値スライダー ---
-        slider_box = QHBoxLayout()
-        self.ror_label = QLabel(f"破産閾値: {int(self._ruin_rate * 100)} %")
-        self.ror_slider = QSlider(Qt.Orientation.Horizontal)
-        self.ror_slider.setMinimum(10)
-        self.ror_slider.setMaximum(50)
-        self.ror_slider.setValue(int(self._ruin_rate * 100))
-        self.ror_slider.setTickInterval(1)
-        self.ror_slider.valueChanged.connect(self.on_ror_slider_changed)
+        # ── 許容DDスライダー ───────────────────────────────
+        dd_box = QHBoxLayout()
+        self.dd_label = QLabel(f"許容する最大DD: {int(self._ruin_rate * 100)} %")
 
-        slider_box.addWidget(QLabel("▼低リスク"))
-        slider_box.addWidget(self.ror_slider)
-        slider_box.addWidget(QLabel("高リスク▲"))
-        slider_box.addWidget(self.ror_label)
-        main_vbox.addLayout(slider_box)
+        self.dd_slider = QSlider(Qt.Orientation.Horizontal)
+        self.dd_slider.setMinimum(10)     # 10 %
+        self.dd_slider.setMaximum(50)     # 50 %
+        self.dd_slider.setValue(int(self._ruin_rate * 100))
+        self.dd_slider.setTickInterval(1)
+        self.dd_slider.valueChanged.connect(self.on_dd_slider_changed)
+        self.dd_slider.setToolTip("左: 小さいDD許容 / 右: 大きいDD許容")
 
-        # --- Matplotlib チャート ---
+        dd_box.addWidget(self.dd_slider)
+        dd_box.addWidget(self.dd_label)
+        main_vbox.addLayout(dd_box)
+
+        # ── チャート ─────────────────────────────────────────
         self.canvas = FigureCanvas(Figure(figsize=(6, 3)))
         self.ax = self.canvas.figure.subplots()
         main_vbox.addWidget(self.canvas)
 
-        # --- 指標テーブル（5行×6列=Metric/Value×3組） ---
+        # ── 指標テーブル 5行×6列 ───────────────────────────
         self.table = QTableWidget()
         main_vbox.addWidget(self.table)
 
-        # --- ファイル管理グループ ---
+        # ── ファイル管理パネル ─────────────────────────────
         file_group = QGroupBox("追加ファイル管理")
         file_vbox = QVBoxLayout(file_group)
 
@@ -94,47 +90,69 @@ class MainWindow(QMainWindow):
         main_vbox.addWidget(file_group)
         self.setCentralWidget(central)
 
-    def on_ror_slider_changed(self, value: int):
-        self._ruin_rate = value / 100  # 0.1〜0.5
-        self.ror_label.setText(f"破産閾値: {value} %")
+    # ---------------------------------------------------------------------
+    # スライダー変更
+    # ---------------------------------------------------------------------
+    def on_dd_slider_changed(self, value: int):
+        self._ruin_rate = value / 100
+        self.dd_label.setText(f"許容する最大DD: {value} %")
         self.recalculate_metrics()
 
+    # ---------------------------------------------------------------------
+    # ファイル追加
+    # ---------------------------------------------------------------------
     def open_files(self):
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Select Excel Files", "", "Excel Files (*.xlsx)"
         )
         if paths:
-            # 追加: ファイルリストに追記（重複不可）
             for p in paths:
                 if p not in self.file_paths:
                     self.file_paths.append(p)
             self.refresh_file_list()
-            self.recalculate_metrics()  # 全ONで再計算
+            self.recalculate_metrics()
 
+    # ---------------------------------------------------------------------
+    # ファイル一覧表示更新
+    # ---------------------------------------------------------------------
     def refresh_file_list(self):
         self.file_list.clear()
         for path in self.file_paths:
             item = QListWidgetItem(Path(path).name)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             item.setCheckState(Qt.CheckState.Checked)
+            item.setToolTip(str(path))
             self.file_list.addItem(item)
 
+    # ---------------------------------------------------------------------
+    # 全ファイルリセット
+    # ---------------------------------------------------------------------
     def reset_files(self):
         self.file_paths.clear()
         self.file_list.clear()
         self.clear_chart_and_metrics()
 
+    # ---------------------------------------------------------------------
+    # 再計算（チェックON ファイルのみ）
+    # ---------------------------------------------------------------------
     def recalculate_metrics(self):
-        checked_paths = []
-        for i in range(self.file_list.count()):
-            item = self.file_list.item(i)
-            if item.checkState() == Qt.CheckState.Checked:
-                checked_paths.append(self.file_paths[i])
+        checked_paths = self.get_checked_paths()
         if checked_paths:
             self.controller.load_files(checked_paths)
         else:
             self.clear_chart_and_metrics()
 
+    # ヘルパー: 現在チェックされているファイルパスを返す
+    def get_checked_paths(self) -> list[str]:
+        return [
+            self.file_paths[i]
+            for i in range(self.file_list.count())
+            if self.file_list.item(i).checkState() == Qt.CheckState.Checked
+        ]
+
+    # ---------------------------------------------------------------------
+    # View 更新メソッド
+    # ---------------------------------------------------------------------
     def clear_chart_and_metrics(self):
         self.ax.clear()
         self.ax.set_title("Equity Curve")
@@ -150,25 +168,18 @@ class MainWindow(QMainWindow):
         self.canvas.draw()
 
     def update_metrics(self, stats: dict):
-        # 5行×3組（Metric, Value）で並べる
-        stats_items = list(stats.items())
-        row_count = 5
-        col_count = 6  # 3組×Metric/Value
-
+        row_count, col_count = 5, 6  # 5行×Metric/Value×3組
         self.table.setRowCount(row_count)
         self.table.setColumnCount(col_count)
-
-        headers = []
-        for i in range(3):
-            headers.extend([f"Metric", f"Value"])
+        headers = sum([["Metric", "Value"] for _ in range(3)], [])
         self.table.setHorizontalHeaderLabels(headers)
         self.table.clearContents()
 
-        for idx, (k, v) in enumerate(stats_items):
+        for idx, (k, v) in enumerate(stats.items()):
             row = idx % row_count
             col = (idx // row_count) * 2
             if col >= col_count:
-                continue  # 15個超は非表示
+                continue
             self.table.setItem(row, col, QTableWidgetItem(str(k)))
             if isinstance(v, (int, float)):
                 display = f"{v:.2f}" if "Rate" not in k and "%" not in k else f"{v:.2f} %"
@@ -176,5 +187,6 @@ class MainWindow(QMainWindow):
                 display = str(v)
             self.table.setItem(row, col + 1, QTableWidgetItem(display))
 
+    # ruin_rate を Controller へ渡すための getter
     def get_ruin_rate(self) -> float:
         return self._ruin_rate
