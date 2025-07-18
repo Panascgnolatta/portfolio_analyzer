@@ -2,12 +2,16 @@ import pandas as pd
 import numpy as np
 
 class MetricsCalculator:
-    """Trading戦略の重要指標を網羅したクラス。RoRはモンテカルロ法。"""
+    """トレード時系列でエクイティカーブを計算し、各種指標を返す"""
 
     def equity_curve(self, df: pd.DataFrame, initial_cash: float = 100000) -> pd.Series:
-        daily = df.groupby('Date')['損益 USD'].sum().sort_index()
-        equity = initial_cash + daily.cumsum()
-        equity.index = pd.to_datetime(equity.index)
+        """
+        トレード単位の「時系列」でエクイティカーブを計算（groupbyしない！）
+        """
+        # '損益 USD'がなければ'損益'列で
+        pnl_col = '損益 USD' if '損益 USD' in df.columns else '損益'
+        equity = initial_cash + df[pnl_col].cumsum()
+        equity.index = pd.to_datetime(df['DateTime'])
         return equity
 
     def calc_cagr(self, equity: pd.Series) -> float:
@@ -91,7 +95,6 @@ class MetricsCalculator:
         return avg_win, avg_loss
 
     def calc_max_win_loss_streak(self, trade_list: pd.Series) -> tuple:
-        # 最大連勝・最大連敗
         win_streak = lose_streak = max_win = max_lose = 0
         for pnl in trade_list:
             if pnl > 0:

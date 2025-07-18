@@ -21,13 +21,10 @@ class MainWindow(QMainWindow):
     メイン GUI。
     - Excel ファイル読み込み
     - 損益曲線チャート
-    - 指標テーブル
+    - 指標テーブル（縦5行×横3組のグリッド）
     - 破産閾値スライダー
     """
 
-    # ----------------------------
-    # 初期化
-    # ----------------------------
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Portfolio Analyzer")
@@ -35,9 +32,6 @@ class MainWindow(QMainWindow):
         self._ruin_rate = 0.20  # 20% デフォルト
         self._build_ui()
 
-    # ----------------------------
-    # UIレイアウト構築
-    # ----------------------------
     def _build_ui(self):
         central = QWidget()
         main_vbox = QVBoxLayout(central)
@@ -51,8 +45,8 @@ class MainWindow(QMainWindow):
         slider_box = QHBoxLayout()
         self.ror_label = QLabel(f"破産閾値: {int(self._ruin_rate * 100)} %")
         self.ror_slider = QSlider(Qt.Orientation.Horizontal)
-        self.ror_slider.setMinimum(10)   # 10 %
-        self.ror_slider.setMaximum(50)   # 50 %
+        self.ror_slider.setMinimum(10)
+        self.ror_slider.setMaximum(50)
         self.ror_slider.setValue(int(self._ruin_rate * 100))
         self.ror_slider.setTickInterval(1)
         self.ror_slider.valueChanged.connect(self.on_ror_slider_changed)
@@ -68,25 +62,17 @@ class MainWindow(QMainWindow):
         self.ax = self.canvas.figure.subplots()
         main_vbox.addWidget(self.canvas)
 
-        # --- 指標テーブル ---
-        self.table = QTableWidget(0, 2)
-        self.table.setHorizontalHeaderLabels(["Metric", "Value"])
+        # --- 指標テーブル（5行×6列=Metric/Value×3組） ---
+        self.table = QTableWidget()
         main_vbox.addWidget(self.table)
 
         self.setCentralWidget(central)
 
-    # --------------------------------------------------
-    # スライダー変更
-    # --------------------------------------------------
     def on_ror_slider_changed(self, value: int):
         self._ruin_rate = value / 100  # 0.1〜0.5
         self.ror_label.setText(f"破産閾値: {value} %")
-        # 既にデータがロード済みなら再計算
         self.controller.update_metrics_with_ruin_rate(self._ruin_rate)
 
-    # --------------------------------------------------
-    # ファイル選択
-    # --------------------------------------------------
     def open_files(self):
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Select Excel Files", "", "Excel Files (*.xlsx)"
@@ -94,9 +80,6 @@ class MainWindow(QMainWindow):
         if paths:
             self.controller.load_files(paths)
 
-    # --------------------------------------------------
-    # Controller から呼ばれる View 更新メソッド
-    # --------------------------------------------------
     def update_chart(self, equity):
         self.ax.clear()
         self.ax.plot(equity.index, equity.values)
@@ -104,17 +87,35 @@ class MainWindow(QMainWindow):
         self.canvas.draw()
 
     def update_metrics(self, stats: dict):
-        self.table.setRowCount(len(stats))
-        for row, (k, v) in enumerate(stats.items()):
-            self.table.setItem(row, 0, QTableWidgetItem(k))
+        # 指標を縦5行×横3組（Metric, Valueの6列）で並べる
+        stats_items = list(stats.items())
+        row_count = 5
+        col_count = 6  # 3組×Metric/Value
+
+        self.table.setRowCount(row_count)
+        self.table.setColumnCount(col_count)
+
+        # ヘッダー行
+        headers = []
+        for i in range(3):
+            headers.extend([f"Metric", f"Value"])
+        self.table.setHorizontalHeaderLabels(headers)
+
+        # 内容クリア
+        self.table.clearContents()
+
+        # 指標をグリッド状にセット
+        for idx, (k, v) in enumerate(stats_items):
+            row = idx % row_count
+            col = (idx // row_count) * 2  # Metric/Valueセットで2列ずつ
+            if col >= col_count:
+                continue  # 15個超は表示しない
+            self.table.setItem(row, col, QTableWidgetItem(str(k)))
             if isinstance(v, (int, float)):
                 display = f"{v:.2f}" if "Rate" not in k and "%" not in k else f"{v:.2f} %"
             else:
                 display = str(v)
-            self.table.setItem(row, 1, QTableWidgetItem(display))
+            self.table.setItem(row, col + 1, QTableWidgetItem(display))
 
-    # --------------------------------------------------
-    # Controller から ruin_rate を取得する用
-    # --------------------------------------------------
     def get_ruin_rate(self) -> float:
         return self._ruin_rate
