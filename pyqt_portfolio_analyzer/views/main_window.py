@@ -10,9 +10,7 @@ from pathlib import Path
 from ..controller import Controller
 
 
-# --------------------------------------------------
-# テーブル（チェック + 削除ボタン用）
-# --------------------------------------------------
+# ---------- ファイル一覧テーブル ----------
 class FileTable(QTableWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -23,9 +21,7 @@ class FileTable(QTableWidget):
         self.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
 
 
-# --------------------------------------------------
-# ドロップ領域コンテナ（ヒント + テーブル）
-# --------------------------------------------------
+# ---------- ドラッグ&ドロップ領域（ヒント + テーブル） ----------
 class FileDropArea(QWidget):
     filesDropped = pyqtSignal(list)  # list[str]
 
@@ -35,34 +31,26 @@ class FileDropArea(QWidget):
 
         self.stack = QStackedLayout(self)
 
-        # ヒントラベル
         self.hint = QLabel("ここに .xlsx ファイルを\nドラッグ＆ドロップ\nまたは『Excelファイルを開く』")
         self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.hint.setStyleSheet("""
         QLabel {
             color:#888; border:1px dashed #555; padding:24px;
             background:#2a2d30; font-size:14px; border-radius:6px;
-        }
-        """)
+        }""")
 
-        # テーブル
         self.table = FileTable()
-
-        self.stack.addWidget(self.hint)   # index 0
-        self.stack.addWidget(self.table)  # index 1
+        self.stack.addWidget(self.hint)
+        self.stack.addWidget(self.table)
         self.stack.setCurrentWidget(self.hint)
 
         self._highlight = "QWidget { border: 2px dashed #55aaff; border-radius:6px; }"
         self._normal = ""
 
-    # --- 外部から表示切替 ---
-    def show_hint(self):
-        self.stack.setCurrentWidget(self.hint)
+    def show_hint(self): self.stack.setCurrentWidget(self.hint)
+    def show_table(self): self.stack.setCurrentWidget(self.table)
 
-    def show_table(self):
-        self.stack.setCurrentWidget(self.table)
-
-    # --- Drag & Drop 処理 ---
+    # ---- Drag & Drop events ----
     def dragEnterEvent(self, event):
         if self._contains_xlsx(event):
             event.acceptProposedAction()
@@ -99,26 +87,29 @@ class FileDropArea(QWidget):
         return any(u.toLocalFile().lower().endswith(".xlsx") for u in event.mimeData().urls())
 
 
-# --------------------------------------------------
-# メインウィンドウ
-# --------------------------------------------------
+# ---------- メインウィンドウ ----------
 class MainWindow(QMainWindow):
     """メイン UI"""
+
+    # モンテカルロ試行回数プリセット
+    N_SIMS_PRESETS = [1000, 2000, 5000, 10000, 20000, 50000, 100000]
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Portfolio Analyzer")
         self.controller = Controller(self)
-        self._ruin_rate = 0.20
+        self._ruin_rate = 0.20          # 許容最大DD（比率）
+        self._n_sims_index = 3          # 初期 10,000 回
         self.file_paths: list[str] = []
         self._build_ui()
 
+    # ---------- UI構築 ----------
     def _build_ui(self):
         central = QWidget()
         main_vbox = QVBoxLayout(central)
         self.statusBar().showMessage("Ready")
 
-        # --- 上部ボタン ---
+        # (1) ファイル操作
         top_box = QHBoxLayout()
         self.btn_open = QPushButton("Excelファイルを開く")
         self.btn_open.clicked.connect(self.open_files)
@@ -129,7 +120,7 @@ class MainWindow(QMainWindow):
         top_box.addWidget(self.btn_reset)
         main_vbox.addLayout(top_box)
 
-        # --- 許容DDスライダー ---
+        # (2) 許容DDスライダー
         dd_box = QHBoxLayout()
         self.dd_label = QLabel(f"許容する最大DD: {int(self._ruin_rate * 100)} %")
         self.dd_slider = QSlider(Qt.Orientation.Horizontal)
@@ -138,31 +129,44 @@ class MainWindow(QMainWindow):
         self.dd_slider.setValue(int(self._ruin_rate * 100))
         self.dd_slider.setTickInterval(1)
         self.dd_slider.valueChanged.connect(self.on_dd_slider_changed)
-        self.dd_slider.setToolTip("左: 小さいDD許容 / 右: 大きいDD許容")
+        dd_box.addWidget(QLabel("最大DD"))
         dd_box.addWidget(self.dd_slider)
         dd_box.addWidget(self.dd_label)
         main_vbox.addLayout(dd_box)
 
-        # --- チャート ---
+        # (3) MonteCarlo 試行回数スライダー
+        sims_box = QHBoxLayout()
+        self.sims_slider = QSlider(Qt.Orientation.Horizontal)
+        self.sims_slider.setMinimum(0)
+        self.sims_slider.setMaximum(len(self.N_SIMS_PRESETS) - 1)
+        self.sims_slider.setValue(self._n_sims_index)
+        self.sims_slider.setTickInterval(1)
+        self.sims_slider.setSingleStep(1)
+        self.sims_slider.valueChanged.connect(self.on_sims_slider_changed)
+        self.sims_label = QLabel(self._format_sims_label())
+        sims_box.addWidget(QLabel("MonteCarlo"))
+        sims_box.addWidget(self.sims_slider)
+        sims_box.addWidget(self.sims_label)
+        main_vbox.addLayout(sims_box)
+
+        # (4) チャート
         self.canvas = FigureCanvas(Figure(figsize=(6, 3)))
         self.ax = self.canvas.figure.subplots()
         self._init_chart_appearance()
         main_vbox.addWidget(self.canvas)
 
-        # --- 指標テーブル ---
+        # (5) 指標テーブル
         self.table = QTableWidget()
         main_vbox.addWidget(self.table)
 
-        # --- ファイル管理 ---
+        # (6) ファイル管理
         file_group = QGroupBox("")
         file_vbox = QVBoxLayout(file_group)
 
-        # ドロップエリア
         self.drop_area = FileDropArea()
         self.drop_area.filesDropped.connect(self.on_files_dropped)
         file_vbox.addWidget(self.drop_area)
 
-        # 全ON/全OFF
         onoff_box = QHBoxLayout()
         self.btn_all_on = QPushButton("全ON")
         self.btn_all_on.clicked.connect(self.file_list_all_on)
@@ -173,7 +177,6 @@ class MainWindow(QMainWindow):
         onoff_box.addWidget(self.btn_all_off)
         file_vbox.addLayout(onoff_box)
 
-        # 再計算
         self.btn_update = QPushButton("再計算（チェックのみ）")
         self.btn_update.clicked.connect(self.recalculate_metrics)
         file_vbox.addWidget(self.btn_update)
@@ -181,7 +184,7 @@ class MainWindow(QMainWindow):
         main_vbox.addWidget(file_group)
         self.setCentralWidget(central)
 
-        # --- ダークテーマ QSS ---
+        # (7) ダークテーマ
         self.setStyleSheet("""
         QWidget { background: #232629; color: #eaeaea; font-size: 13px; }
         QPushButton {
@@ -191,29 +194,38 @@ class MainWindow(QMainWindow):
         QPushButton:hover { background: #44484e; }
         QTableWidget { background: #282c34; color: #eaeaea; }
         QHeaderView::section { background: #393e46; color: #eaeaea; }
-        QSlider::groove:horizontal { background: #282c34; }
-        QSlider::handle:horizontal { background: #eaeaea; }
+        QSlider::groove:horizontal { background: #282c34; height:6px; }
+        QSlider::handle:horizontal { background: #eaeaea; width:14px; }
         QGroupBox { border: 1px solid #35393e; margin-top: 8px; }
         """)
 
-    # --- チャート外観初期化 ---
+    # ---------- チャート外観 ----------
     def _init_chart_appearance(self):
         self.ax.set_facecolor("#282c34")
         self.canvas.figure.set_facecolor("#282c34")
         self.ax.set_title("Equity Curve", color="white")
         self.ax.tick_params(colors="white")
-        self.ax.xaxis.label.set_color("white")
-        self.ax.yaxis.label.set_color("white")
         for spine in self.ax.spines.values():
             spine.set_color("white")
 
-    # --- DD スライダー変更 ---
+    # ---------- スライダー変更 ----------
     def on_dd_slider_changed(self, value: int):
         self._ruin_rate = value / 100
         self.dd_label.setText(f"許容する最大DD: {value} %")
         self.recalculate_metrics()
 
-    # --- ファイルダイアログ追加 ---
+    def on_sims_slider_changed(self, value: int):
+        self._n_sims_index = value
+        self.sims_label.setText(self._format_sims_label())
+        # 重い場合は次行をコメントアウトし「再計算」ボタン運用へ
+        self.recalculate_metrics()
+
+    def _format_sims_label(self):
+        n = self.get_n_sims()
+        step = 100 / n
+        return f"{n:,} 回 (刻み≈{step:.3f}%)"
+
+    # ---------- ファイル操作 ----------
     def open_files(self):
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Select Excel Files", "", "Excel Files (*.xlsx)"
@@ -221,11 +233,9 @@ class MainWindow(QMainWindow):
         if paths:
             self._append_files(paths)
 
-    # --- ドロップ追加 ---
     def on_files_dropped(self, paths: list[str]):
         self._append_files(paths)
 
-    # --- 共通追加処理 ---
     def _append_files(self, paths: list[str]):
         added = 0
         for p in paths:
@@ -239,7 +249,6 @@ class MainWindow(QMainWindow):
         else:
             self.statusBar().showMessage("No new files added")
 
-    # --- ファイル一覧更新 ---
     def refresh_file_list(self):
         table = self.drop_area.table
         table.setRowCount(len(self.file_paths))
@@ -261,7 +270,6 @@ class MainWindow(QMainWindow):
         else:
             self.drop_area.show_table()
 
-    # --- 個別削除 ---
     def remove_file_row(self, row: int):
         if 0 <= row < len(self.file_paths):
             del self.file_paths[row]
@@ -269,20 +277,18 @@ class MainWindow(QMainWindow):
             self.recalculate_metrics()
             self.statusBar().showMessage("File removed")
 
-    # --- 全ON / 全OFF ---
     def file_list_all_on(self):
-        table = self.drop_area.table
-        for i in range(table.rowCount()):
-            table.item(i, 0).setCheckState(Qt.CheckState.Checked)
+        t = self.drop_area.table
+        for i in range(t.rowCount()):
+            t.item(i, 0).setCheckState(Qt.CheckState.Checked)
         self.recalculate_metrics()
 
     def file_list_all_off(self):
-        table = self.drop_area.table
-        for i in range(table.rowCount()):
-            table.item(i, 0).setCheckState(Qt.CheckState.Unchecked)
+        t = self.drop_area.table
+        for i in range(t.rowCount()):
+            t.item(i, 0).setCheckState(Qt.CheckState.Unchecked)
         self.recalculate_metrics()
 
-    # --- 全リセット ---
     def reset_files(self):
         self.file_paths.clear()
         self.drop_area.table.setRowCount(0)
@@ -290,24 +296,23 @@ class MainWindow(QMainWindow):
         self.drop_area.show_hint()
         self.statusBar().showMessage("All files cleared")
 
-    # --- 再計算 ---
+    # ---------- 再計算 ----------
     def recalculate_metrics(self):
-        checked_paths = self.get_checked_paths()
-        if checked_paths:
-            self.controller.load_files(checked_paths)
+        paths = self.get_checked_paths()
+        if paths:
+            self.controller.load_files(paths)
         else:
             self.clear_chart_and_metrics()
 
-    # --- チェックされたパス ---
     def get_checked_paths(self) -> list[str]:
-        table = self.drop_area.table
+        t = self.drop_area.table
         return [
             self.file_paths[i]
-            for i in range(table.rowCount())
-            if table.item(i, 0).checkState() == Qt.CheckState.Checked
+            for i in range(t.rowCount())
+            if t.item(i, 0).checkState() == Qt.CheckState.Checked
         ]
 
-    # --- View 更新 ---
+    # ---------- View 更新 ----------
     def clear_chart_and_metrics(self):
         self.ax.clear()
         self._init_chart_appearance()
@@ -329,6 +334,7 @@ class MainWindow(QMainWindow):
         headers = sum([["Metric", "Value"] for _ in range(3)], [])
         self.table.setHorizontalHeaderLabels(headers)
         self.table.clearContents()
+
         for idx, (k, v) in enumerate(stats.items()):
             row = idx % row_count
             col = (idx // row_count) * 2
@@ -336,10 +342,15 @@ class MainWindow(QMainWindow):
                 continue
             self.table.setItem(row, col, QTableWidgetItem(str(k)))
             if isinstance(v, (int, float)):
-                display = f"{v:.2f}" if "Rate" not in k and "%" not in k else f"{v:.2f} %"
+                # "Step" と "CI" はそのまま数値表示（%記号はキーに含めていない）
+                display = f"{v:.2f}"
             else:
                 display = str(v)
             self.table.setItem(row, col + 1, QTableWidgetItem(display))
 
+    # ---------- Getter ----------
     def get_ruin_rate(self) -> float:
         return self._ruin_rate
+
+    def get_n_sims(self) -> int:
+        return self.N_SIMS_PRESETS[self._n_sims_index]
