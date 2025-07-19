@@ -2,8 +2,9 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QMainWindow, QFileDialog, QWidget, QVBoxLayout, QPushButton, QLabel, QTableWidget,
     QTableWidgetItem, QSlider, QHBoxLayout, QGroupBox, QAbstractItemView, QHeaderView,
-    QStackedLayout
+    QStackedLayout, QDoubleSpinBox, QSpinBox
 )
+from PyQt6.QtCore import QSignalBlocker
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from pathlib import Path
@@ -91,7 +92,7 @@ class FileDropArea(QWidget):
 class MainWindow(QMainWindow):
     """メイン UI"""
 
-    # モンテカルロ試行回数プリセット
+    # モンテカルロ試行回数プリセット（スライダー用インデックス）
     N_SIMS_PRESETS = [1000, 2000, 5000, 10000, 20000, 50000, 100000]
 
     def __init__(self):
@@ -99,12 +100,14 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Portfolio Analyzer")
         self.controller = Controller(self)
         self._ruin_rate = 0.20          # 許容最大DD（比率）
-        self._n_sims_index = 3          # 初期 10,000 回
+        self._n_sims_index = 3          # 初期 10,000 回（プリセット）
         self.file_paths: list[str] = []
+        self._building = False          # 初期構築フラグ（信号抑制用）
         self._build_ui()
 
     # ---------- UI構築 ----------
     def _build_ui(self):
+        self._building = True
         central = QWidget()
         main_vbox = QVBoxLayout(central)
         self.statusBar().showMessage("Ready")
@@ -120,22 +123,33 @@ class MainWindow(QMainWindow):
         top_box.addWidget(self.btn_reset)
         main_vbox.addLayout(top_box)
 
-        # (2) 許容DDスライダー
+        # (2) 許容DDスライダー + SpinBox
         dd_box = QHBoxLayout()
-        self.dd_label = QLabel(f"許容する最大DD: {int(self._ruin_rate * 100)} %")
-        self.dd_slider = QSlider(Qt.Orientation.Horizontal)
-        self.dd_slider.setMinimum(10)
-        self.dd_slider.setMaximum(50)
-        self.dd_slider.setValue(int(self._ruin_rate * 100))
-        self.dd_slider.setTickInterval(1)
-        self.dd_slider.valueChanged.connect(self.on_dd_slider_changed)
         dd_box.addWidget(QLabel("最大DD"))
-        dd_box.addWidget(self.dd_slider)
+        self.dd_slider = QSlider(Qt.Orientation.Horizontal)
+        self.dd_slider.setMinimum(0)
+        self.dd_slider.setMaximum(100)  # 0〜100%
+        self.dd_slider.setValue(int(self._ruin_rate * 100))
+        self.dd_slider.setTickInterval(5)
+        self.dd_slider.valueChanged.connect(self.on_dd_slider_changed)
+
+        self.dd_spin = QDoubleSpinBox()
+        self.dd_spin.setRange(0.0, 100.0)
+        self.dd_spin.setDecimals(1)
+        self.dd_spin.setSingleStep(0.5)
+        self.dd_spin.setValue(self._ruin_rate * 100)
+        self.dd_spin.valueChanged.connect(self.on_dd_spin_changed)
+
+        self.dd_label = QLabel(f"許容する最大DD: {int(self._ruin_rate * 100)} %")
+
+        dd_box.addWidget(self.dd_slider, stretch=1)
+        dd_box.addWidget(self.dd_spin)
         dd_box.addWidget(self.dd_label)
         main_vbox.addLayout(dd_box)
 
-        # (3) MonteCarlo 試行回数スライダー
+        # (3) MonteCarlo 試行回数 スライダー + SpinBox
         sims_box = QHBoxLayout()
+        sims_box.addWidget(QLabel("MonteCarlo"))
         self.sims_slider = QSlider(Qt.Orientation.Horizontal)
         self.sims_slider.setMinimum(0)
         self.sims_slider.setMaximum(len(self.N_SIMS_PRESETS) - 1)
@@ -143,9 +157,17 @@ class MainWindow(QMainWindow):
         self.sims_slider.setTickInterval(1)
         self.sims_slider.setSingleStep(1)
         self.sims_slider.valueChanged.connect(self.on_sims_slider_changed)
+
+        self.sims_spin = QSpinBox()
+        self.sims_spin.setRange(100, 500_000)
+        self.sims_spin.setSingleStep(100)
+        self.sims_spin.setValue(self.N_SIMS_PRESETS[self._n_sims_index])
+        self.sims_spin.valueChanged.connect(self.on_sims_spin_changed)
+
         self.sims_label = QLabel(self._format_sims_label())
-        sims_box.addWidget(QLabel("MonteCarlo"))
-        sims_box.addWidget(self.sims_slider)
+
+        sims_box.addWidget(self.sims_slider, stretch=1)
+        sims_box.addWidget(self.sims_spin)
         sims_box.addWidget(self.sims_label)
         main_vbox.addLayout(sims_box)
 
@@ -199,6 +221,8 @@ class MainWindow(QMainWindow):
         QGroupBox { border: 1px solid #35393e; margin-top: 8px; }
         """)
 
+        self._building = False
+
     # ---------- チャート外観 ----------
     def _init_chart_appearance(self):
         self.ax.set_facecolor("#282c34")
@@ -208,16 +232,50 @@ class MainWindow(QMainWindow):
         for spine in self.ax.spines.values():
             spine.set_color("white")
 
-    # ---------- スライダー変更 ----------
+    # ---------- 許容DD スライダー / SpinBox 同期 ----------
     def on_dd_slider_changed(self, value: int):
-        self._ruin_rate = value / 100
-        self.dd_label.setText(f"許容する最大DD: {value} %")
+        if self._building:
+            return
+        # スライダー → SpinBox
+        with QSignalBlocker(self.dd_spin):
+            self.dd_spin.setValue(float(value))
+        self._ruin_rate = value / 100.0
+        self.dd_label.setText(f"許容する最大DD: {value:.1f} %")
         self.recalculate_metrics()
 
-    def on_sims_slider_changed(self, value: int):
-        self._n_sims_index = value
+    def on_dd_spin_changed(self, value: float):
+        if self._building:
+            return
+        # SpinBox → スライダー
+        with QSignalBlocker(self.dd_slider):
+            self.dd_slider.setValue(int(round(value)))
+        self._ruin_rate = value / 100.0
+        self.dd_label.setText(f"許容する最大DD: {value:.1f} %")
+        self.recalculate_metrics()
+
+    # ---------- MonteCarlo スライダー / SpinBox 同期 ----------
+    def on_sims_slider_changed(self, idx: int):
+        if self._building:
+            return
+        idx = max(0, min(idx, len(self.N_SIMS_PRESETS) - 1))
+        self._n_sims_index = idx
+        preset_val = self.N_SIMS_PRESETS[idx]
+        # スライダー → SpinBox
+        with QSignalBlocker(self.sims_spin):
+            self.sims_spin.setValue(preset_val)
         self.sims_label.setText(self._format_sims_label())
-        # 重い場合は次行をコメントアウトし「再計算」ボタン運用へ
+        self.recalculate_metrics()
+
+    def on_sims_spin_changed(self, val: int):
+        if self._building:
+            return
+        # SpinBox → 近いプリセット位置へ（参考用）
+        diffs = [abs(val - p) for p in self.N_SIMS_PRESETS]
+        nearest = diffs.index(min(diffs))
+        with QSignalBlocker(self.sims_slider):
+            self.sims_slider.setValue(nearest)
+        self._n_sims_index = nearest  # 参照用（表示はSpin優先）
+        self.sims_label.setText(self._format_sims_label())
         self.recalculate_metrics()
 
     def _format_sims_label(self):
@@ -324,7 +382,7 @@ class MainWindow(QMainWindow):
     def update_chart(self, equity):
         self.ax.clear()
         self._init_chart_appearance()
-        self.ax.plot(equity.index, equity.values, color="#ff4444", linewidth=1.3)
+        self.ax.plot(equity.index, equity.values, color="#ff4444", linewidth=1.2)
         self.canvas.draw()
 
     def update_metrics(self, stats: dict):
@@ -342,7 +400,6 @@ class MainWindow(QMainWindow):
                 continue
             self.table.setItem(row, col, QTableWidgetItem(str(k)))
             if isinstance(v, (int, float)):
-                # "Step" と "CI" はそのまま数値表示（%記号はキーに含めていない）
                 display = f"{v:.2f}"
             else:
                 display = str(v)
@@ -353,4 +410,5 @@ class MainWindow(QMainWindow):
         return self._ruin_rate
 
     def get_n_sims(self) -> int:
-        return self.N_SIMS_PRESETS[self._n_sims_index]
+        # SpinBox優先（自由入力）
+        return int(self.sims_spin.value())
