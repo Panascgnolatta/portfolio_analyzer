@@ -1,202 +1,218 @@
-Portfolio Analyzer
-トレーディングビュー（TradingView）のバックテスト Excel ファイル（.xlsx）を読み込んで、
-複数銘柄（戦略）のパフォーマンスを一括評価できる PyQt6 ベースのデスクトップアプリです。
+# Portfolio Analyzer
 
-ダークテーマ & 黒背景＋赤ラインのエクイティカーブ（タイトルは常に Equity Curve）
+トレーディングビュー（TradingView）のバックテスト Excel ファイル（`.xlsx`）を読み込み、  
+**複数銘柄（戦略）のパフォーマンスを一括評価できる PyQt6 デスクトップアプリ** です。
 
-複数ファイルをドラッグ＆ドロップで追加、個別 ON/OFF・削除・一括管理
+- ダークテーマ & 黒背景＋赤ラインの *Equity Curve*
+- 複数ファイルをドラッグ＆ドロップで追加
+- ファイルごとに ON/OFF・削除（ゴミ箱）・All ON / All OFF・一括リセット
+- 許容最大ドローダウン & Monte Carlo 試行回数をスライダー＋数値入力で即時調整
+- 日本語 / 英語 UI ワンクリック切替（タイトル *Equity Curve* は英語固定）
 
-許容最大ドローダウン / Monte Carlo 試行回数をスライダー & 数値入力で即時調整
+---
 
-日本語 / 英語 UI ワンクリック切替（辞書ベース即時反映）
+## 🚀 主な特徴 (Overview)
 
-🚀 特徴
-複数バックテストファイルを同時分析（TradingView エクスポート対応）
+| 区分 | 内容 |
+|------|------|
+| 入力 | 複数 `.xlsx` 追加 / 同時読込 / ドラッグ＆ドロップ |
+| ファイル管理 | チェック ON/OFF / 個別削除 / All ON / All OFF / 全リセット / 再計算（選択のみ） |
+| 可視化 | ダークテーマ＋赤ラインのエクイティカーブ（高コントラスト） |
+| 指標 | CAGR / Max DD / Sharpe / Sortino / Profit Factor / Expectancy / Payoff / Win Rate / Avg Win / Avg Loss / Streaks / Trade Count / Risk of Ruin / RoR Step |
+| Monte Carlo | 許容最大 DD (%) と試行回数（1k〜100k＋任意 100〜500k）可変 |
+| 多言語 | 日本語 / 英語 即時切替 |
+| UX | スライダー＋SpinBox 同期、ドラッグ＆ドロップ、ゴミ箱削除、3ブロック指標レイアウト |
+| 実行 | `python -m pyqt_portfolio_analyzer` または `start_app.bat` |
 
-ドラッグ＆ドロップ対応（空領域に .xlsx を直接投入可能）
+---
 
-エクイティカーブ可視化（高コントラスト黒背景＋赤ライン）
+## 🧪 Risk of Ruin (Monte Carlo) の概要
 
-主要トレード指標を自動算出 & 3ブロック表示
+- トレード損益系列を **復元抽出 (bootstrap)** でランダム並び生成  
+- 途中の最大ピークからのドローダウン率が **許容最大DD (％)** を超えた時点で “破産” 判定  
+- 破産率 = 破産が発生した試行数 / 総試行数 × 100  
+- 分解能 (RoR Step) = 100 / 試行数  
+- 試行回数を増やすと安定するが計算コスト ↑  
+- （将来）乱数シード固定オプション予定  
 
-許容最大DD（破産閾値）を動的変更 → Risk of Ruin を再計算
+---
 
-Monte Carlo 試行回数をスライダー or 入力ボックスで調整（1,000〜100,000+ 任意）
+## 📊 実装済み指標
 
-ゴミ箱ボタンで個別削除 / All ON / All OFF / まとめてリセット
+| 指標 | 説明 |
+|------|------|
+| CAGR (%) | 年率複利リターン |
+| Max Drawdown (%) | 最大ドローダウン（ピーク比） |
+| Sharpe Ratio | 年率化平均 / 年率化標準偏差（Rf=0） |
+| Sortino Ratio | 下方偏差を用いた Sharpe 変種 |
+| Profit Factor | 総利益 ÷ |総損失| |
+| Expectancy | 1トレード期待値 (AvgWin * WinRate − |AvgLoss| * (1−WinRate)) |
+| Payoff Ratio | 平均利益 ÷ |平均損失| |
+| Win Rate (%) | 勝率 |
+| Avg Win / Avg Loss | 勝ち/負け平均損益 |
+| Max Win Streak / Max Lose Streak | 最大連勝 / 最大連敗 |
+| Trade Count | 総トレード数 |
+| Risk of Ruin (%) | Monte Carlo 破産確率 |
+| RoR Step (%) | 表示分解能（=100/試行数） |
 
-期待値・Payoff・ストリークなど運用評価に必須の補助指標も搭載
+---
 
-日本語 / 英語 UI 即時切替（Equity Curve タイトルのみ英語固定）
+## 🖼 スクリーンショット
 
-📝 使い方
-Excelファイルを開く ボタン、または空のファイルリスト領域へ .xlsx をドラッグ＆ドロップ
+![screenshot](docs/screenshot.png)
 
-エクイティカーブ & 各種指標が自動表示
+---
 
-許容最大ドローダウン（％）スライダー or 数値入力で変更 → Risk of Ruin 自動更新
+## 📝 使い方 (Quick Start)
 
-Monte Carlo 試行回数 を変更（スライダー / 数値入力）→ 分解能 (RoR Step) も更新
+1. 「**Excelファイルを開く**」ボタンか、空のファイルリスト領域に `.xlsx` を **ドラッグ＆ドロップ**  
+2. 自動でエクイティカーブ & 指標を計算表示  
+3. 許容最大DD (%) をスライダー / 数値入力で変更 → Risk of Ruin 自動再計算  
+4. Monte Carlo 試行回数を調整（スライダー or 数値入力）  
+5. ファイル一覧で ON/OFF、ゴミ箱削除 / All ON / All OFF / 全リセット  
+6. 「再計算（チェックのみ）」で有効ファイルのみ再集計（高速化用）  
+7. 🌐 ボタンで JP / EN 切替  
 
-ファイル管理領域で ON/OFF（チェック）、ゴミ箱削除、All ON / All OFF、全リセット
+---
 
-再計算 ボタンで「チェックされているファイルのみ」で再集計（負荷軽減したいときに使用）
+## 📦 対応 Excel 形式
 
-左上の 🌐 ボタンで UI 言語（JP / EN）を切り替え
+| 項目 | 内容 |
+|------|------|
+| 必須シート | `トレード一覧` |
+| 必須列例 | `日時`（約定または確定時刻）、損益列（`損益` / `Profit` 等） |
+| 日次集計 | `日時` を日付化 → 日次損益合計 → 累積和で Equity |
+| 初期資金 | `metrics.py` 内で定義（例: 100,000）変更可 |
 
-📊 実装されている主要指標
-CAGR (%) … 年率複利リターン
+> 列名が異なる場合は `data_loader.py` のマッピングを調整。
 
-Max Drawdown (%) … 最大ドローダウン
+---
 
-Sharpe Ratio … シャープレシオ（年率化・無リスクレート 0 想定）
+## ⚙ インストール / 実行
 
-Sortino Ratio … Sortino レシオ（下方偏差使用）
+```bash
+# 1. 取得
+git clone https://github.com/your-account/portfolio_analyzer.git
+cd portfolio_analyzer
 
-Profit Factor … 総利益 ÷ 総損失（絶対値）
-
-Expectancy … 1トレードあたり期待値
-
-Payoff Ratio … 平均利益 ÷ 平均損失（絶対値）
-
-Win Rate (%) … 勝率
-
-Avg Win / Avg Loss … 平均利益／平均損失
-
-Max Win Streak / Max Lose Streak … 最大連勝／最大連敗
-
-Trade Count … 総トレード数
-
-Risk of Ruin (%) … 破産確率（Monte Carlo ブートストラップ）
-
-RoR Step (%) … Monte Carlo 試行数に依存する理論最小刻み（= 100 / 試行数）
-
-🧪 Risk of Ruin (Monte Carlo)
-トレード損益系列を復元抽出でランダム並び生成
-
-ピーク→谷の下落率が「許容最大DD（％）」に達したらその試行は “破産” 判定
-
-試行回数を増やすと精度向上（計算時間↑）
-
-分解能（RoR Step）は 100 / 試行回数 で表示
-
-再現性（乱数シード固定）は将来実装予定
-
-🖥️ スクリーンショット
-
-
-🌐 多言語
-右上（または上部）の 🌐 ボタンで 日本語 / 英語 切替
-
-翻訳辞書は views/main_window.py 内 TRANSLATIONS に定義
-
-Equity Curve タイトルは英語固定（可読性優先）
-
-⚡ Windows デスクトップからの起動
-start_app.bat をダブルクリックでアプリ起動
-
-バッチへのショートカットをデスクトップに配置すると便利
-
-🛠️ 開発・コントリビュート
-指標追加 / UI 改善 / 高速化案など Pull Request・Issue 歓迎
-
-計算ロジック: pyqt_portfolio_analyzer/models/metrics.py
-
-データ読み込み: pyqt_portfolio_analyzer/models/data_loader.py
-
-GUI / 多言語 / D&D: pyqt_portfolio_analyzer/views/main_window.py
-
-コントローラ: pyqt_portfolio_analyzer/controller.py
-
-📦 対応 Excel 形式（基本前提）
-シート名: トレード一覧
-
-必須列例: 日時, 損益列（例：損益 / Profit など。異なる場合は loader でマッピング要）
-
-日次集計は 日時 → 日付へ変換後、日次損益合計 → 累積和でエクイティカーブ生成
-
-初期資金（例: 100,000）は metrics.py 内で定義（要変更可）
-
-❓ よくある質問
-Q. RoR の値が揺れる
-A. 乱数による Monte Carlo のため。将来 Seed オプション追加予定。
-
-Q. 指標が NaN になる
-A. トレード数が極端に少ない / 分母が 0（標準偏差ゼロなど）のケース。
-
-Q. タイトルを日本語にしたい
-A. 翻訳辞書に追加し、フォント（Meiryo など）設定を行えば可能（現在は英語固定方針）。
-
-Q. 結果がファイル順で微妙に変わる
-A. 同一日時トレードの並び順差。data_loader で明示ソートを強化可能。
-
-🛠️ 開発用（環境セットアップ例）
-sh
-コピーする
-編集する
-# 環境作成（初回）
+# 2. 環境作成
 conda create -n pa-env python=3.12 -y
 conda activate pa-env
 
-# 依存インストール
+# 3. 依存
 pip install -r requirements.txt
-# （requirements.txt がまだ無ければ）
+# （無い場合）
 pip install pyqt6 pandas numpy matplotlib openpyxl
 
-# 起動
+# 4. 起動
 python -m pyqt_portfolio_analyzer
 # または
 start_app.bat
-🔄 Git ワークフロー例
-sh
+🔄 Git フロー例
+bash
 コピーする
 編集する
 git status
 git add .
-git commit -m "feat: add JP/EN toggle & Monte Carlo adjustable"
+git commit -m "feat: add JP/EN toggle & adjustable Monte Carlo"
 git pull --rebase origin main
 git push origin main
-🔮 今後追加予定（アイデア）
-設定永続化（言語 / 許容DD / 試行回数 / 最終ファイル）
+🧩 フォルダ構成（抜粋）
+markdown
+コピーする
+編集する
+pyqt_portfolio_analyzer/
+  __init__.py
+  __main__.py
+  main.py
+  controller.py
+  models/
+    data_loader.py
+    metrics.py
+  views/
+    main_window.py
+docs/
+  screenshot.png
+  icon.png (任意)
+start_app.bat
+README.md
+🛠 カスタマイズポイント
+目的	ファイル	メモ
+指標追加	metrics.py	compute_metrics() の返却 dict に追加
+損益列名増補	data_loader.py	列マッピングを拡張
+テーマ変更	main_window.py	setStyleSheet 編集
+初期資金変更	metrics.py	初期残高定数
+翻訳追加	main_window.py	TRANSLATIONS 辞書
 
-Calmar / MAR / Ulcer / CVaR / Recovery Factor / Skew / Kurtosis
+❓ FAQ
+Q. RoR が毎回少し違う
+A. Monte Carlo 乱数のため（Seed 固定機能は今後追加予定）。
 
-銘柄別寄与・相関マトリクス・ドローダウン曲線・月次損益ヒートマップ
+Q. 指標が NaN / 0 になる
+A. データ数が少ない / 標準偏差ゼロ。トレード件数を増やしてください。
 
-Monte Carlo：ブロックブートストラップ / パラメトリック法 / Seed 固定
+Q. 同じファイルでも結果が微妙に差異
+A. 同日同時刻トレードの順序差。ソートを厳密化して軽減可能。
 
-指標・エクイティの CSV / PNG エクスポート
+Q. タイトルを日本語化したい
+A. 翻訳辞書とフォント指定を追加で対応可（デザイン上は英語固定推奨）。
 
-EXE 配布（PyInstaller / Nuitka）
+🔮 今後の予定（Backlog）
+設定永続化（言語 / DD / 試行回数 / 最終ファイル）
 
-単体テスト（pytest）& CI
+追加リスク指標: Calmar / MAR / Ulcer / CVaR / Recovery Factor / Skew / Kurtosis
 
-ポートフォリオ最適化（Sharpe 最大 / VaR / CVaR 最小化）
+銘柄寄与・相関マトリクス・ドローダウンカーブ・月次損益ヒートマップ
 
-📚 参考文献・仕様元
-『システムトレード 基本と原則』ブレント・ペンフォールド著
+Monte Carlo: ブロックブートストラップ / パラメトリック / シード固定
 
-『伝説のトレーダー集団 タートル流投資の魔術』カーティス・フェイス著
+指標 & Equity の CSV / PNG 保存
 
-TradingView 公式ドキュメント
+EXE 化 (PyInstaller / Nuitka)
+
+pytest + CI
+
+ウェイト最適化（Sharpe 最大化、CVaR 最小化）
+
+📚 参考文献
+『システムトレード 基本と原則』ブレント・ペンフォールド
+
+『伝説のトレーダー集団 タートル流投資の魔術』カーティス・フェイス
+
+TradingView / Pine Script 公式ドキュメント
 
 📝 ライセンス
 MIT License
-（著作権表記を残せば商用利用・改変再配布自由）
+商用利用・改変・再配布自由（著作権表記を残してください）。
 
-🙋 コントリビュート方法
-Issue / 機能要望を登録
+🤝 コントリビュート
+Issue / Feature 要望歓迎
 
-Fork → ブランチ作成 → 変更 → テスト
+Fork → Branch → 変更 → テスト → PR
 
-コミットメッセージは feat: / fix: / refactor: / docs: などプリフィクス推奨
-
-Pull Request 作成
+コミットメッセージに feat: / fix: / refactor: / docs: など接頭辞推奨
 
 🗒 再開クイックメモ
-sh
+bash
 コピーする
 編集する
 conda activate pa-env
 python -m pyqt_portfolio_analyzer
-# 例: 設定永続化(QSettings)の実装に着手
+# 次: 設定永続化 (QSettings) 実装 など
+markdown
+コピーする
+編集する
+
+### ✅ GitHub で見出しが効かない場合のチェック
+1. `README.md` 先頭に **BOM なし UTF-8** で保存  
+2. 先頭行が **まったくの先頭** に `# Portfolio Analyzer`（前に空白や全角スペースがない）  
+3. 拡張子が `.md` であること  
+4. ブラウザキャッシュをリロード（Ctrl+Shift+R）  
+
+問題があればその内容を貼っていただければ再度調整します。必要があれば英語版も生成可能です。どうしますか？
+
+
+
+
+
+
